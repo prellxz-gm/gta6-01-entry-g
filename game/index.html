@@ -1,19 +1,155 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Block Dodger</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Isla Verde — Make GTA 6</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #11141b; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a1410; font-family: 'Segoe UI', system-ui, sans-serif; }
   #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-  /* Read aloud, never shown: the status line screen readers announce. */
-  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .hidden { display: none !important; }
+
+  /* HUD */
+  #hud { position: fixed; inset: 0; pointer-events: none; color: #fff; z-index: 5; }
+  #topbar { position: absolute; top: 12px; left: 12px; right: 12px; display: flex; justify-content: space-between; align-items: flex-start; }
+  #money { font-size: 28px; font-weight: 800; color: #7dff8a; text-shadow: 0 2px 6px #000; }
+  #district { font-size: 15px; font-weight: 700; text-shadow: 0 1px 4px #000; }
+  #standing, #income, #crew-status { font-size: 12px; opacity: .9; text-shadow: 0 1px 3px #000; }
+  #wanted { font-size: 26px; letter-spacing: 3px; text-shadow: 0 2px 6px #000; }
+  #mission-box { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); text-align: center; max-width: 46vw; background: rgba(0,0,0,.45); border: 1px solid rgba(255,210,61,.6); border-radius: 10px; padding: 8px 14px; }
+  #mission-title { font-size: 16px; font-weight: 800; color: #ffd23d; }
+  #mission-text { font-size: 13px; opacity: .95; }
+  #minimap { position: absolute; right: 12px; top: 64px; width: 168px; height: 168px; border: 2px solid rgba(255,255,255,.7); border-radius: 50%; background: rgba(0,20,10,.6); }
+  #stats { position: absolute; right: 12px; top: 242px; text-align: right; font-size: 13px; text-shadow: 0 1px 3px #000; }
+  #health-wrap { width: 190px; height: 14px; background: rgba(0,0,0,.55); border: 1px solid #fff; border-radius: 7px; overflow: hidden; margin-left: auto; }
+  #health-fill { height: 100%; width: 100%; background: linear-gradient(90deg,#37d67a,#a5ff6a); }
+  #weapon-box { position: absolute; left: 12px; bottom: 205px; font-size: 15px; text-shadow: 0 1px 3px #000; }
+  #weapon-name { font-weight: 800; color: #ffd23d; }
+  #speed { position: absolute; right: 16px; bottom: 220px; font-size: 26px; font-weight: 800; text-shadow: 0 2px 6px #000; }
+  #hint { position: absolute; bottom: 78px; left: 50%; transform: translateX(-50%); font-size: 14px; color: #ffe27a; text-shadow: 0 1px 4px #000; }
+  #feed { position: absolute; left: 12px; top: 178px; max-width: 340px; }
+  .feed-item { background: rgba(0,0,0,.55); border-left: 4px solid #7dff8a; padding: 6px 10px; margin-bottom: 6px; border-radius: 6px; font-size: 13px; animation: slidein .25s ease-out; }
+  .feed-item.wanted { border-left-color: #ff5533; }
+  .feed-item.mission { border-left-color: #ffd23d; }
+  .feed-item.race { border-left-color: #3dc7e8; }
+  .feed-item.crew { border-left-color: #b83de8; }
+  .feed-item.stunt { border-left-color: #ff9a3d; }
+  @keyframes slidein { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; } }
+
+  /* touch controls */
+  #touch { position: fixed; inset: 0; pointer-events: none; z-index: 6; }
+  .tbtn { pointer-events: auto; position: absolute; width: 58px; height: 58px; border-radius: 50%; border: 2px solid rgba(255,255,255,.8); background: rgba(0,0,0,.45); color: #fff; font-size: 20px; font-weight: 800; display: flex; align-items: center; justify-content: center; user-select: none; }
+  .tbtn:active { background: rgba(255,210,61,.6); }
+  #btn-up { left: 76px; bottom: 150px; } #btn-down { left: 76px; bottom: 78px; }
+  #btn-left { left: 12px; bottom: 112px; } #btn-right { left: 140px; bottom: 112px; }
+  #btn-act { right: 84px; bottom: 96px; background: rgba(61,199,232,.5); }
+  #btn-fire { right: 16px; bottom: 150px; background: rgba(255,85,51,.5); }
+  .abtn { pointer-events: auto; position: absolute; bottom: 12px; padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,.7); background: rgba(0,0,0,.55); color: #fff; font-size: 13px; font-weight: 700; }
+  #btn-wheel { left: 12px; } #btn-mission { left: 96px; } #btn-contract { left: 188px; }
+  #btn-garage { left: 292px; } #btn-race { left: 384px; } #btn-hack { left: 462px; }
+  #btn-pause { right: 12px; top: 12px; pointer-events: auto; position: absolute; width: 44px; height: 44px; border-radius: 8px; border: 1px solid rgba(255,255,255,.7); background: rgba(0,0,0,.55); color: #fff; font-size: 18px; }
+
+  /* weapon wheel + garage */
+  #wheel { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); z-index: 8; background: rgba(0,0,0,.8); border: 2px solid #ffd23d; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px; min-width: 260px; }
+  .wheel-item { padding: 10px 14px; border-radius: 8px; border: 1px solid #888; background: #222; color: #fff; font-size: 15px; text-align: left; cursor: pointer; }
+  .wheel-item.active { background: #ffd23d; color: #000; font-weight: 800; }
+  #garage { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); z-index: 8; background: rgba(10,20,16,.95); border: 2px solid #3dc7e8; border-radius: 14px; padding: 18px; color: #fff; min-width: 340px; max-width: 90vw; }
+  #garage h2 { color: #3dc7e8; margin-bottom: 10px; }
+  .garage-row { margin-bottom: 12px; font-size: 14px; }
+  .garage-row button, #garage button { margin-top: 6px; padding: 8px 14px; border-radius: 8px; border: none; background: #ffd23d; font-weight: 800; cursor: pointer; }
+  .garage-row button:disabled { background: #666; color: #ccc; }
+
+  /* screens */
+  .screen { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: #fff; background: linear-gradient(160deg, rgba(10,40,20,.88), rgba(60,10,0,.82)); padding: 20px; }
+  .screen h1 { font-size: 58px; font-weight: 900; letter-spacing: 2px; color: #ffd23d; text-shadow: 0 4px 18px #000; }
+  .screen h2 { font-size: 20px; font-weight: 600; color: #7dff8a; margin: 6px 0 16px; }
+  .screen p { max-width: 560px; font-size: 15px; line-height: 1.55; opacity: .95; }
+  .screen .keys { margin: 14px 0; font-size: 13px; background: rgba(0,0,0,.5); border-radius: 10px; padding: 10px 16px; line-height: 1.7; }
+  .big-btn { margin-top: 18px; padding: 14px 42px; font-size: 20px; font-weight: 900; border: none; border-radius: 12px; background: #ffd23d; color: #111; cursor: pointer; box-shadow: 0 6px 24px rgba(0,0,0,.5); }
+  .big-btn:hover { background: #ffe27a; }
+  .ghost-btn { margin-top: 12px; padding: 10px 26px; font-size: 15px; font-weight: 700; border: 1px solid #fff; border-radius: 10px; background: transparent; color: #fff; cursor: pointer; }
+  @media (max-width: 700px) {
+    .screen h1 { font-size: 36px; }
+    #mission-box { max-width: 60vw; }
+    #minimap { width: 110px; height: 110px; }
+    #btn-garage, #btn-race, #btn-hack { display: none; }
+  }
 </style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
 </head>
 <body>
-<canvas id="game" aria-label="Block Dodger: move the paddle left and right to dodge falling blocks and catch coins"></canvas>
-<p id="status" role="status" aria-live="polite"></p>
+<canvas id="game"></canvas>
+
+<div id="hud">
+  <div id="topbar">
+    <div>
+      <div id="money">$250</div>
+      <div id="district">Porto Verde</div>
+      <div id="standing"></div>
+      <div id="income"></div>
+      <div id="crew-status"></div>
+    </div>
+    <div id="wanted">☆☆☆☆☆</div>
+  </div>
+  <div id="mission-box">
+    <div id="mission-title">Isla Verde</div>
+    <div id="mission-text">Press M to start the first mission.</div>
+  </div>
+  <canvas id="minimap" width="168" height="168"></canvas>
+  <div id="stats">
+    <div id="health-wrap"><div id="health-fill"></div></div>
+    <div id="health-text">100 HP</div>
+  </div>
+  <div id="feed"></div>
+  <div id="weapon-box"><span id="weapon-name">Pistol</span> • <span id="ammo">120</span> <span style="opacity:.7">(Q wheel, 1-5 switch, R buy ammo)</span></div>
+  <div id="speed">0 km/h</div>
+  <div id="hint"></div>
+</div>
+
+<div id="touch">
+  <div class="tbtn" id="btn-up">▲</div>
+  <div class="tbtn" id="btn-down">▼</div>
+  <div class="tbtn" id="btn-left">◀</div>
+  <div class="tbtn" id="btn-right">▶</div>
+  <div class="tbtn" id="btn-act">E</div>
+  <div class="tbtn" id="btn-fire">🔥</div>
+  <button class="abtn" id="btn-wheel">Weapons (Q)</button>
+  <button class="abtn" id="btn-mission">Mission (M)</button>
+  <button class="abtn" id="btn-contract">Contract (C)</button>
+  <button class="abtn" id="btn-garage">Garage (G)</button>
+  <button class="abtn" id="btn-race">Race</button>
+  <button class="abtn" id="btn-hack">Hack (X)</button>
+  <button id="btn-pause">II</button>
+</div>
+
+<div id="wheel" class="hidden"></div>
+<div id="garage" class="hidden"></div>
+
+<div id="start-screen" class="screen">
+  <h1>ISLA VERDE</h1>
+  <h2>A volcanic island. One crew. Zero mercy.</h2>
+  <p>Welcome to Isla Verde — beaches, jungle, a smoking volcano and a port run by the syndicate.
+  Steal cars, outrun the cops, run 10 story missions, take 5 syndicate contracts, win street races,
+  claim territory and build your crew: Rico the getaway driver and Luna the hacker.</p>
+  <div class="keys">
+    WASD / arrows — move &amp; drive &nbsp;•&nbsp; E — steal / enter car &nbsp;•&nbsp; Click — shoot<br>
+    Q — weapon wheel &nbsp;•&nbsp; M — mission &nbsp;•&nbsp; C — syndicate contract &nbsp;•&nbsp; G — garage<br>
+    X — Luna hacks the police scanner &nbsp;•&nbsp; Shift — nitro / sprint &nbsp;•&nbsp; Space — jump &nbsp;•&nbsp; P — pause
+  </div>
+  <button class="big-btn" id="start-btn">START ENGINE</button>
+  <p style="margin-top:12px; font-size:13px; opacity:.8">Progress saves automatically in this browser.</p>
+</div>
+
+<div id="pause-screen" class="screen hidden">
+  <h1>PAUSED</h1>
+  <p>Isla Verde waits for no one. Well — right now it does.</p>
+  <button class="big-btn" id="resume-btn">RESUME</button>
+  <button class="ghost-btn" id="restart-btn">Restart</button>
+</div>
+
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>

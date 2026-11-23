@@ -1,53 +1,59 @@
-// Keyboard and pointer input. Held keys give a steering direction; one-shot presses (start or
-// restart, pause) are queued as bit flags and taken once by the loop, so a press between two
-// frames is never lost and never counted twice.
-
-export const ACTION_CONFIRM = 1;
-export const ACTION_PAUSE = 2;
-
-const LEFT = new Set(['ArrowLeft', 'KeyA']);
-const RIGHT = new Set(['ArrowRight', 'KeyD']);
-const CONFIRM = new Set(['Space', 'Enter']);
-const PAUSE = new Set(['KeyP', 'Escape']);
-
-export function createInput(target) {
-  let left = false;
-  let right = false;
-  let actions = 0;
-
-  window.addEventListener('keydown', (event) => {
-    if (LEFT.has(event.code)) left = true;
-    else if (RIGHT.has(event.code)) right = true;
-    else if (CONFIRM.has(event.code)) {
-      if (!event.repeat) actions |= ACTION_CONFIRM;
-    } else if (PAUSE.has(event.code)) {
-      if (!event.repeat) actions |= ACTION_PAUSE;
-    } else return;
-    event.preventDefault();
-  });
-  window.addEventListener('keyup', (event) => {
-    if (LEFT.has(event.code)) left = false;
-    else if (RIGHT.has(event.code)) right = false;
-  });
-  // A key released while the tab is hidden never sends keyup: let go of everything on blur.
-  window.addEventListener('blur', () => {
-    left = false;
-    right = false;
-  });
-  target.addEventListener('pointerdown', () => {
-    actions |= ACTION_CONFIRM;
-  });
+// Isla Verde — input.js
+// Keyboard + on-screen touch buttons. Single source of input state.
+export function createInput() {
+  const keys = new Set();
+  const state = {
+    forward: false, back: false, left: false, right: false,
+    sprint: false, brake: false, jump: false,
+    interact: false, attack: false, wheel: false, pause: false,
+    horn: false, nitro: false, hack: false, reload: false,
+    camera: false, anyKey: false,
+  };
+  const pressed = new Set(); // edge-triggered, consumed by game each tick
+  const map = {
+    KeyW: 'forward', ArrowUp: 'forward',
+    KeyS: 'back', ArrowDown: 'back',
+    KeyA: 'left', ArrowLeft: 'left',
+    KeyD: 'right', ArrowRight: 'right',
+    ShiftLeft: 'sprint', ShiftRight: 'sprint',
+    Space: 'jump', KeyE: 'interact', KeyF: 'attack',
+    KeyQ: 'wheel', KeyP: 'pause', Escape: 'pause',
+    KeyH: 'horn', KeyR: 'reload', KeyX: 'hack',
+    KeyC: 'camera', KeyN: 'nitro',
+  };
+  function down(e) {
+    if (map[e.code]) {
+      if (!keys.has(e.code)) pressed.add(map[e.code]);
+      keys.add(e.code);
+      state[map[e.code]] = true;
+      state.anyKey = true;
+      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+    }
+  }
+  function up(e) {
+    if (map[e.code]) {
+      keys.delete(e.code);
+      // recompute held state for that action
+      state[map[e.code]] = [...keys].some((k) => map[k] === map[e.code]);
+    }
+  }
+  window.addEventListener('keydown', down);
+  window.addEventListener('keyup', up);
+  window.addEventListener('blur', () => { keys.clear(); for (const k of Object.keys(state)) state[k] = false; });
 
   return {
-    /** -1 for left, 1 for right, 0 for neither or both. */
-    direction() {
-      return (right ? 1 : 0) - (left ? 1 : 0);
+    state,
+    wasPressed(action) { const hit = pressed.has(action); if (hit) pressed.delete(action); return hit; },
+    consumeAll() { pressed.clear(); },
+    setTouch(action, on) {
+      state[action] = on;
+      if (on) pressed.add(action);
+      state.anyKey = state.anyKey || on;
     },
-    /** The one-shot presses since the last call, as ACTION_* flags. */
-    takeActions() {
-      const taken = actions;
-      actions = 0;
-      return taken;
+    // mouse: click = attack / interact on HUD buttons handled by DOM
+    bindMouse(canvas, onAttack) {
+      canvas.addEventListener('mousedown', (e) => { if (e.button === 0) { state.attack = true; pressed.add('attack'); if (onAttack) onAttack(); } });
+      canvas.addEventListener('mouseup', () => { state.attack = false; });
     },
   };
 }
